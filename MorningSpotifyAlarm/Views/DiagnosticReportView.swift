@@ -17,6 +17,12 @@ struct DiagnosticReportView: View {
                 .disabled(isRunning)
 
                 Button {
+                    openSpotify()
+                } label: {
+                    Label("Open Spotify to Prepare iPhone", systemImage: "music.note")
+                }
+
+                Button {
                     UIPasteboard.general.string = reportText
                     copied = true
                 } label: {
@@ -49,5 +55,10 @@ struct DiagnosticReportView: View {
                 isRunning = false
             }
         }
+    }
+
+    private func openSpotify() {
+        guard let url = URL(string: "spotify://") else { return }
+        UIApplication.shared.open(url)
     }
 }

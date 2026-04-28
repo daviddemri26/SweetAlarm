@@ -27,7 +27,7 @@ enum UserFacingError: LocalizedError {
         case .premiumRequired:
             "Spotify Premium is required for Web API playback control."
         case .noIPhoneDeviceFound:
-            "No iPhone Spotify device is visible. Open Spotify on the iPhone once, then try again."
+            "No iPhone Spotify device is visible. Open Spotify on the iPhone, start playback on This iPhone, then try again."
         case .spotifyDeviceUnavailable:
             "Spotify device unavailable. Open Spotify once and run Test Now."
         case .rateLimited:

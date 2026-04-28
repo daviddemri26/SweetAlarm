@@ -14,6 +14,7 @@ struct AlarmConfiguration: Codable, Identifiable, Equatable {
     var targetVolume: Int = 70
     var spotifyPlaybackEnabled: Bool = true
     var retryEnabled: Bool = true
+    var allowNonIPhoneDeviceFallback: Bool = false
     var advancedSpotifyVolumeEnabled: Bool = false
     var fallbackEnabled: Bool = true
     var fallbackDelayMinutes: Int = 2

@@ -50,6 +50,7 @@ final class DiagnosticReportService {
         add("Target Shortcut volume: \(configuration.targetVolume)%")
         add("Spotify playback enabled: \(configuration.spotifyPlaybackEnabled)")
         add("Retry enabled: \(configuration.retryEnabled)")
+        add("Allow non-iPhone fallback: \(configuration.allowNonIPhoneDeviceFallback)")
         add("Advanced Spotify volume enabled: \(configuration.advancedSpotifyVolumeEnabled)")
         add("Shortcut volume step confirmed manually: \(configuration.shortcutVolumeStepConfirmed)")
         add("Backup alarm configured manually: \(configuration.backupAlarmConfigured)")
@@ -105,6 +106,18 @@ final class DiagnosticReportService {
             warn("Playlist metadata", error.localizedDescription)
         }
 
+        add("")
+        add("PLAYER STATE BEFORE PLAYBACK")
+        do {
+            if let state = try await client.playbackState() {
+                add("Current state: isPlaying=\(state.isPlaying), device=\(state.device?.name ?? "nil"), type=\(state.device?.type ?? "nil"), deviceId=\(redactID(state.device?.id)), context=\(state.context?.uri ?? "nil")")
+            } else {
+                add("Current state: Spotify returned 204 no active playback")
+            }
+        } catch {
+            warn("GET /v1/me/player before playback", error.localizedDescription)
+        }
+
         let devices: [SpotifyDevice]
         do {
             devices = try await client.devices()
@@ -125,12 +138,23 @@ final class DiagnosticReportService {
             add("Device \(index + 1): name=\(device.name), type=\(device.type), id=\(redactID(device.id)), active=\(device.isActive), restricted=\(device.isRestricted), privateSession=\(device.isPrivateSession), supportsVolume=\(device.supportsVolume), volumePercent=\(device.volumePercent.map(String.init) ?? "nil"), iPhoneLike=\(device.isIPhoneLike)")
         }
 
-        guard let selectedDevice = PlaybackOrchestrator.selectIPhoneDevice(from: devices),
+        guard let selectedDevice = PlaybackOrchestrator.selectPlaybackDevice(from: devices, allowNonIPhoneFallback: configuration.allowNonIPhoneDeviceFallback),
               let selectedDeviceID = selectedDevice.id else {
             fail("iPhone device selection", "No unrestricted iPhone/Smartphone device with device_id found")
+            add("")
+            add("DEVICE PREPARATION STEPS")
+            add("1. Tap Open Spotify to Prepare iPhone in this screen.")
+            add("2. In Spotify, play any track for a few seconds.")
+            add("3. Open Spotify Connect devices and choose This iPhone, not Living Room TV.")
+            add("4. Return here and run the diagnostic again.")
+            add("5. If Spotify still reports only Living Room TV but the sound is really coming from the iPhone, enable Settings > Allow non-iPhone fallback and run the diagnostic again.")
             return finish(lines: lines, succeeded: !hardFailure)
         }
         pass("Selected device", "name=\(selectedDevice.name), type=\(selectedDevice.type), id=\(redactID(selectedDevice.id)), supportsVolume=\(selectedDevice.supportsVolume)")
+
+        if !selectedDevice.isIPhoneLike {
+            warn("Selected device is not iPhone-like", "This happened only because Allow non-iPhone fallback is enabled. Confirm sound is not going to a TV/speaker before using this for an alarm.")
+        }
 
         if selectedDevice.supportsVolume {
             warn("Spotify volume support", "Selected device supports Spotify volume; advanced option may be tested separately")

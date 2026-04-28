@@ -26,7 +26,7 @@ final class HealthCheckService {
             let token = try await authService.validAccessToken()
             let client = SpotifyAPIClient(accessToken: token)
             let devices = try await client.devices()
-            if PlaybackOrchestrator.selectIPhoneDevice(from: devices) == nil {
+            if PlaybackOrchestrator.selectPlaybackDevice(from: devices, allowNonIPhoneFallback: configuration.allowNonIPhoneDeviceFallback) == nil {
                 failures.append("No iPhone Spotify device visible")
             }
         } catch {

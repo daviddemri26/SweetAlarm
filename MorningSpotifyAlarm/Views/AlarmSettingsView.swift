@@ -36,11 +36,12 @@ struct AlarmSettingsView: View {
             Section {
                 Toggle("Enable Spotify playback", isOn: $draft.spotifyPlaybackEnabled)
                 Toggle("Enable playback retry", isOn: $draft.retryEnabled)
+                Toggle("Allow non-iPhone fallback", isOn: $draft.allowNonIPhoneDeviceFallback)
                 Toggle("Advanced Spotify-device volume", isOn: $draft.advancedSpotifyVolumeEnabled)
             } header: {
                 Text("Playback")
             } footer: {
-                Text("Spotify volume is skipped for iPhone devices with supports_volume false. The advanced option only applies to devices that support Spotify volume.")
+                Text("Keep non-iPhone fallback off for the real alarm unless Spotify is mislabeling your iPhone. Otherwise the app may start playback on a TV or speaker.")
             }
 
             Section {

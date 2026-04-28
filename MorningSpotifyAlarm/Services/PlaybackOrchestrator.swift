@@ -32,8 +32,10 @@ final class PlaybackOrchestrator {
             let token = try await authService.validAccessToken()
             let client = SpotifyAPIClient(accessToken: token)
             let devices = try await client.devices()
-            guard let device = Self.selectIPhoneDevice(from: devices), let deviceID = device.id else {
-                throw UserFacingError.noIPhoneDeviceFound
+            guard let device = Self.selectPlaybackDevice(from: devices, allowNonIPhoneFallback: configuration.allowNonIPhoneDeviceFallback),
+                  let deviceID = device.id else {
+                let visibleDevices = devices.map { "\($0.name) (\($0.type))" }.joined(separator: ", ")
+                throw UserFacingError.spotifyAPI("No iPhone Spotify device is visible. Visible devices: \(visibleDevices.isEmpty ? "none" : visibleDevices). Open Spotify on the iPhone and choose This iPhone, then try again.")
             }
             selectedDevice = device
 
@@ -99,11 +101,34 @@ final class PlaybackOrchestrator {
             .first
     }
 
+    static func selectPlaybackDevice(from devices: [SpotifyDevice], allowNonIPhoneFallback: Bool) -> SpotifyDevice? {
+        if let iPhoneDevice = selectIPhoneDevice(from: devices) {
+            return iPhoneDevice
+        }
+
+        guard allowNonIPhoneFallback else { return nil }
+
+        return devices
+            .filter { !$0.isRestricted && $0.id != nil }
+            .sorted { lhs, rhs in
+                fallbackScore(lhs) > fallbackScore(rhs)
+            }
+            .first
+    }
+
     private static func score(_ device: SpotifyDevice) -> Int {
         var value = 0
         if device.isActive { value += 100 }
         if device.name.localizedCaseInsensitiveContains("iphone") { value += 50 }
         if device.type.localizedCaseInsensitiveContains("smartphone") { value += 25 }
+        return value
+    }
+
+    private static func fallbackScore(_ device: SpotifyDevice) -> Int {
+        var value = 0
+        if device.isActive { value += 100 }
+        if device.type.localizedCaseInsensitiveContains("computer") { value += 20 }
+        if device.type.localizedCaseInsensitiveContains("speaker") { value += 10 }
         return value
     }
 
