@@ -52,6 +52,12 @@ struct HomeView: View {
                     Label(appState.isBusy ? "Checking..." : "Run Health Check", systemImage: "checkmark.shield")
                 }
                 .disabled(appState.isBusy)
+
+                NavigationLink {
+                    DiagnosticReportView()
+                } label: {
+                    Label("Run Diagnostic Report", systemImage: "stethoscope")
+                }
             }
 
             if let latest = appState.logs.first {
