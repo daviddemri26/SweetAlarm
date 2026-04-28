@@ -48,6 +48,24 @@ playlist-read-collaborative
 
 The current default Client ID is configured in source. Any client secret or test tokens exposed during manual testing should be rotated in Spotify Developer Dashboard.
 
+### Fix `redirect_uri: Not matching configuration`
+
+Spotify requires an exact redirect URI match. If Safari or the Spotify login screen shows:
+
+```text
+redirect_uri: Not matching configuration
+```
+
+open the Spotify Developer Dashboard for the app with Client ID `569bdbf9ce1b47fd87da2adc41793143`, then add and save exactly:
+
+```text
+morningspotifyalarm://callback
+```
+
+Do not use `http://127.0.0.1:8888/callback` for the iPhone app flow. Do not add a trailing slash.
+
+In the iOS app, use `Reconnect / Switch Account` on the Spotify Connection screen to clear local tokens and start a private authentication session that does not reuse the wrong Safari Spotify account.
+
 ## Running On iPhone
 
 1. Open `MorningSpotifyAlarm.xcodeproj`.

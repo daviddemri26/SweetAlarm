@@ -8,10 +8,13 @@ final class SpotifyAuthService {
     private let accessTokenAccount = "spotifyAccessToken"
     private let refreshTokenAccount = "spotifyRefreshToken"
     private let codeVerifierAccount = "spotifyPKCECodeVerifier"
+    private let stateAccount = "spotifyOAuthState"
 
     func makeAuthorizationURL() throws -> URL {
         let verifier = Self.makeCodeVerifier()
+        let state = Self.makeCodeVerifier()
         try keychain.save(verifier, account: codeVerifierAccount)
+        try keychain.save(state, account: stateAccount)
         let challenge = Self.codeChallenge(for: verifier)
 
         var components = URLComponents(string: "https://accounts.spotify.com/authorize")
@@ -22,6 +25,7 @@ final class SpotifyAuthService {
             URLQueryItem(name: "scope", value: AppConfig.scopesString),
             URLQueryItem(name: "code_challenge_method", value: "S256"),
             URLQueryItem(name: "code_challenge", value: challenge),
+            URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "show_dialog", value: "true")
         ]
 
@@ -36,6 +40,11 @@ final class SpotifyAuthService {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         if let error = components?.queryItems?.first(where: { $0.name == "error" })?.value {
             throw UserFacingError.spotifyAPI("Spotify login failed: \(error)")
+        }
+        guard let returnedState = components?.queryItems?.first(where: { $0.name == "state" })?.value,
+              let expectedState = try keychain.read(account: stateAccount),
+              returnedState == expectedState else {
+            throw UserFacingError.spotifyAPI("Spotify login state did not match. Start Spotify login again.")
         }
         guard let code = components?.queryItems?.first(where: { $0.name == "code" })?.value else {
             throw UserFacingError.spotifyAPI("Spotify callback did not include an authorization code.")
@@ -53,6 +62,7 @@ final class SpotifyAuthService {
         ])
         try persist(response)
         keychain.delete(account: codeVerifierAccount)
+        keychain.delete(account: stateAccount)
     }
 
     func validAccessToken() async throws -> String {
@@ -103,6 +113,7 @@ final class SpotifyAuthService {
         keychain.delete(account: accessTokenAccount)
         keychain.delete(account: refreshTokenAccount)
         keychain.delete(account: codeVerifierAccount)
+        keychain.delete(account: stateAccount)
         store.clearAuthState()
     }
 

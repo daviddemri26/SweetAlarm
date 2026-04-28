@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Combine
 import SwiftUI
 
@@ -27,6 +28,7 @@ final class AppState: ObservableObject {
 
     private let store = AlarmConfigStore.shared
     private let authService = SpotifyAuthService()
+    private lazy var authSessionRunner = SpotifyAuthSessionRunner(authService: authService)
 
     init() {
         configuration = store.loadConfiguration()
@@ -48,17 +50,24 @@ final class AppState: ObservableObject {
         authSummary = await authService.connectionSummary()
     }
 
-    func connectSpotify() {
-        do {
-            let url = try authService.makeAuthorizationURL()
-            UIApplication.shared.open(url)
-        } catch {
-            latestMessage = error.localizedDescription
+    func connectSpotify(prefersEphemeralSession: Bool = false) {
+        isBusy = true
+        latestMessage = nil
+        Task {
+            do {
+                try await authSessionRunner.authenticate(prefersEphemeralSession: prefersEphemeralSession)
+                latestMessage = "Spotify connected."
+            } catch {
+                latestMessage = Self.authErrorMessage(from: error)
+            }
+            await refreshAuthSummary()
+            isBusy = false
         }
     }
 
     func disconnectSpotify() {
         authService.disconnect()
+        latestMessage = "Local Spotify tokens cleared. Use Reconnect / Switch Account to sign in again."
         Task { await refreshAuthSummary() }
     }
 
@@ -98,5 +107,19 @@ final class AppState: ObservableObject {
                 self.isBusy = false
             }
         }
+    }
+
+    private static func authErrorMessage(from error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == ASWebAuthenticationSessionError.errorDomain,
+           nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+            return "Spotify login canceled."
+        }
+
+        let description = error.localizedDescription
+        if description.localizedCaseInsensitiveContains("redirect") {
+            return "Spotify rejected the redirect URI. In Spotify Developer Dashboard, add exactly: \(AppConfig.spotifyRedirectUri)"
+        }
+        return description
     }
 }
