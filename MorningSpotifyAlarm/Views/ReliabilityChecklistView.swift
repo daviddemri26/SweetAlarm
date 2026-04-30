@@ -8,7 +8,8 @@ struct ReliabilityChecklistView: View {
             checklistRow("Spotify auth valid", state: spotifyAuthState)
             checklistRow("Refresh token available", state: appState.authSummary == "Needs re-authentication" ? .bad : .good)
             checklistRow("Playlist valid", state: SpotifyURIParser.playlistID(from: appState.configuration.playlistUri) == nil ? .bad : .good)
-            checklistRow("iPhone Spotify device visible", state: latestPlaybackSucceeded ? .good : .warning)
+            checklistRow("Preferred Spotify device saved", state: appState.configuration.devicePreference.hasPreferredDevice ? .good : .bad)
+            checklistRow("Preferred Spotify device visible", state: preferredDeviceVisible ? .good : .warning)
             checklistRow("Last playback test successful", state: latestPlaybackSucceeded ? .good : .warning)
             checklistRow("Shortcut volume step confirmed", state: appState.configuration.shortcutVolumeStepConfirmed ? .good : .warning)
             checklistRow("Backup alarm configured", state: appState.configuration.backupAlarmConfigured || appState.configuration.fallbackEnabled ? .good : .warning)
@@ -25,6 +26,7 @@ struct ReliabilityChecklistView: View {
         .navigationTitle("Reliability Checklist")
         .task {
             await appState.refreshAuthSummary()
+            await appState.refreshSpotifyDevices()
         }
     }
 
@@ -38,6 +40,13 @@ struct ReliabilityChecklistView: View {
 
     private var latestHealthCheckSucceeded: Bool {
         appState.logs.first { $0.source == .healthCheck }?.status == .success
+    }
+
+    private var preferredDeviceVisible: Bool {
+        guard let preferredID = appState.configuration.devicePreference.preferredDeviceId else {
+            return false
+        }
+        return appState.visibleSpotifyDevices.contains { $0.id == preferredID }
     }
 
     private func checklistRow(_ title: String, state: ChecklistState) -> some View {

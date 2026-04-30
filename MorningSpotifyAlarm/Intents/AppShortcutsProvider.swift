@@ -21,5 +21,23 @@ struct MorningSpotifyAppShortcuts: AppShortcutsProvider {
             shortTitle: "Health Check",
             systemImageName: "checkmark.shield"
         )
+
+        AppShortcut(
+            intent: CheckSpotifyIPhoneDeviceIntent(),
+            phrases: [
+                "Check Spotify iPhone Device with \(.applicationName)"
+            ],
+            shortTitle: "Check iPhone",
+            systemImageName: "iphone"
+        )
+
+        AppShortcut(
+            intent: MarkPrewarmStartedIntent(),
+            phrases: [
+                "Mark Spotify Prewarm Started with \(.applicationName)"
+            ],
+            shortTitle: "Mark Prewarm",
+            systemImageName: "music.note.list"
+        )
     }
 }

@@ -85,6 +85,25 @@ final class SpotifyAPIClient {
         try await sendWithoutBody(request)
     }
 
+    func transferPlayback(deviceID: String, play: Bool) async throws {
+        let url = baseURL.appendingPathComponent("/me/player")
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(TransferPlaybackRequest(deviceIds: [deviceID], play: play))
+        try await sendWithoutBody(request)
+    }
+
+    func pausePlayback(deviceID: String) async throws {
+        var components = URLComponents(url: baseURL.appendingPathComponent("/me/player/pause"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "device_id", value: deviceID)]
+        guard let url = components.url else { throw UserFacingError.spotifyAPI("Invalid pause URL.") }
+        var request = authorizedRequest(url: url)
+        request.httpMethod = "PUT"
+        try await sendWithoutBody(request)
+    }
+
+
     func playbackState() async throws -> SpotifyPlaybackState? {
         let request = authorizedRequest(url: baseURL.appendingPathComponent("/me/player"))
         let (data, response): (Data, URLResponse)
@@ -169,6 +188,16 @@ final class SpotifyAPIClient {
             return UserFacingError.spotifyAPI(response.error.message)
         }
         return UserFacingError.spotifyAPI("Spotify API failed with HTTP \(statusCode).")
+    }
+}
+
+private struct TransferPlaybackRequest: Encodable {
+    let deviceIds: [String]
+    let play: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case deviceIds = "device_ids"
+        case play
     }
 }
 

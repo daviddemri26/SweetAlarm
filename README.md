@@ -7,12 +7,15 @@ Personal iOS app that lets Shortcuts trigger exact Spotify playlist playback on 
 The app is a Spotify playback orchestrator, not the primary alarm trigger:
 
 1. Shortcuts Personal Automation fires at the selected time.
-2. Shortcuts sets iPhone media volume, for example 70%.
-3. Shortcuts runs the App Intent `Start Morning Spotify Alarm`.
-4. The app refreshes the Spotify token.
-5. The app calls `GET /v1/me/player/devices`.
-6. The app selects the visible iPhone/Smartphone Spotify device.
-7. The app calls `PUT /v1/me/player/play?device_id=...` with:
+2. Shortcuts sets iPhone media volume to 0%.
+3. Shortcuts opens Spotify and starts any playback briefly to prewarm Spotify Connect.
+4. Shortcuts waits about 8 seconds, then sets iPhone media volume to the target alarm level.
+5. Shortcuts runs the App Intent `Start Morning Spotify Alarm`.
+6. The app refreshes the Spotify token.
+7. The app calls `GET /v1/me/player/devices` with a short retry window.
+8. The app selects only the saved or confidently matched unrestricted iPhone device.
+9. The app calls `PUT /v1/me/player` with `play=false`, then verifies the active device.
+10. The app calls `PUT /v1/me/player/play?device_id=...` with:
 
 ```json
 {
@@ -20,9 +23,9 @@ The app is a Spotify playback orchestrator, not the primary alarm trigger:
 }
 ```
 
-8. The app verifies playback and logs the result.
+11. The app verifies playback and logs the result.
 
-The app does not use private iOS volume APIs, Spotify URL opening, or iOS Play/Pause. Spotify volume control is skipped for iPhone devices that report `supports_volume: false`.
+The app does not use private iOS volume APIs, media-remote tricks, hidden volume hacks, or unsupported background keepalive behavior. Spotify volume control is skipped for iPhone devices that report `supports_volume: false`. If the target iPhone is not visible and verified, the app fails closed and does not play on a TV, speaker, desktop, web player, or Chromecast.
 
 ## Spotify Developer Setup
 
@@ -83,12 +86,15 @@ Create a Personal Automation:
 - Automation: Time of Day
 - Repeat on selected days
 - Run Immediately
-- Action 1: Set Volume to target level, for example 70%
-- Action 2: Run App Shortcut: `Start Morning Spotify Alarm`
-- Action 3: Wait 2 seconds
-- Optional Action 4: Set Volume to target level again
+- Optional Action 1: Run App Shortcut: `Mark Spotify Prewarm Started`
+- Action 2: Set Volume to 0%
+- Action 3: Open App: Spotify
+- Action 4: Play media / resume playback in Spotify, or use any reliable Siri/Spotify action that starts Spotify playback
+- Action 5: Wait 8 seconds
+- Action 6: Set Volume to target level, for example 70%
+- Action 7: Run App Shortcut: `Start Morning Spotify Alarm`
 
-Do not add Open Spotify URL. Do not add Play/Pause.
+The first Spotify playback is only a silent prewarm. The real alarm playlist is selected later by the app through Spotify Web API, always with an explicit `device_id`.
 
 ## Backup Alarm
 

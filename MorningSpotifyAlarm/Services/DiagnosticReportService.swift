@@ -32,7 +32,7 @@ final class DiagnosticReportService {
         }
 
         let startedAt = Date()
-        let configuration = store.loadConfiguration()
+        var configuration = store.loadConfiguration()
 
         add("Morning Spotify Alarm Diagnostic Report")
         add("Generated: \(DateHelpers.displayDateTime.string(from: startedAt))")
@@ -50,10 +50,21 @@ final class DiagnosticReportService {
         add("Target Shortcut volume: \(configuration.targetVolume)%")
         add("Spotify playback enabled: \(configuration.spotifyPlaybackEnabled)")
         add("Retry enabled: \(configuration.retryEnabled)")
-        add("Allow non-iPhone fallback: \(configuration.allowNonIPhoneDeviceFallback)")
+        add("Require preferred device: \(configuration.devicePreference.requirePreferredDevice)")
+        add("Allow automatic iPhone fallback: \(configuration.devicePreference.allowAutomaticIPhoneFallback)")
+        add("Allow non-iPhone fallback: \(configuration.devicePreference.allowNonIPhoneFallback)")
         add("Advanced Spotify volume enabled: \(configuration.advancedSpotifyVolumeEnabled)")
         add("Shortcut volume step confirmed manually: \(configuration.shortcutVolumeStepConfirmed)")
         add("Backup alarm configured manually: \(configuration.backupAlarmConfigured)")
+        add("")
+
+        add("PREFERRED SPOTIFY DEVICE")
+        add("Saved preferred id: \(redactID(configuration.devicePreference.preferredDeviceId))")
+        add("Saved preferred name: \(configuration.devicePreference.preferredDeviceName ?? "nil")")
+        add("Saved preferred type: \(configuration.devicePreference.preferredDeviceType ?? "nil")")
+        add("Saved preferred supportsVolume: \(configuration.devicePreference.preferredDeviceSupportsVolume.map(String.init) ?? "nil")")
+        add("Saved preferred last seen: \(DateHelpers.timeString(configuration.devicePreference.preferredDeviceLastSeenAt))")
+        add("Last successful preferred-device test: \(DateHelpers.timeString(configuration.devicePreference.lastSuccessfulPreferredDeviceTestAt))")
         add("")
 
         guard configuration.spotifyPlaybackEnabled else {
@@ -138,22 +149,40 @@ final class DiagnosticReportService {
             add("Device \(index + 1): name=\(device.name), type=\(device.type), id=\(redactID(device.id)), active=\(device.isActive), restricted=\(device.isRestricted), privateSession=\(device.isPrivateSession), supportsVolume=\(device.supportsVolume), volumePercent=\(device.volumePercent.map(String.init) ?? "nil"), iPhoneLike=\(device.isIPhoneLike)")
         }
 
-        guard let selectedDevice = PlaybackOrchestrator.selectPlaybackDevice(from: devices, allowNonIPhoneFallback: configuration.allowNonIPhoneDeviceFallback),
+        let selectionResult = SpotifyDeviceSelector.selectDevice(from: devices, preference: configuration.devicePreference)
+        if selectionResult.preferredDeviceVisible {
+            configuration.devicePreference.preferredDeviceLastSeenAt = Date()
+            store.saveConfiguration(configuration)
+        }
+
+        add("")
+        add("DEVICE SELECTION")
+        add("Preferred device currently visible: \(selectionResult.preferredDeviceVisible)")
+        add("Selection reason: \(selectionResult.reason.rawValue)")
+
+        guard let selectedDevice = selectionResult.selectedDevice,
               let selectedDeviceID = selectedDevice.id else {
-            fail("iPhone device selection", "No unrestricted iPhone/Smartphone device with device_id found")
+            fail("Device selection", selectionResult.failureMessage ?? "No eligible Spotify device found")
+            add("Playback skipped: true")
             add("")
             add("DEVICE PREPARATION STEPS")
             add("1. Tap Open Spotify to Prepare iPhone in this screen.")
             add("2. In Spotify, play any track for a few seconds.")
             add("3. Open Spotify Connect devices and choose This iPhone, not Living Room TV.")
             add("4. Return here and run the diagnostic again.")
-            add("5. If Spotify still reports only Living Room TV but the sound is really coming from the iPhone, enable Settings > Allow non-iPhone fallback and run the diagnostic again.")
+            add("5. Save the iPhone as Preferred Alarm Device before relying on the Shortcut automation.")
             return finish(lines: lines, succeeded: !hardFailure)
         }
+        add("Playback skipped: false")
         pass("Selected device", "name=\(selectedDevice.name), type=\(selectedDevice.type), id=\(redactID(selectedDevice.id)), supportsVolume=\(selectedDevice.supportsVolume)")
 
-        if !selectedDevice.isIPhoneLike {
-            warn("Selected device is not iPhone-like", "This happened only because Allow non-iPhone fallback is enabled. Confirm sound is not going to a TV/speaker before using this for an alarm.")
+        guard SpotifyDeviceSelector.isEligibleIPhoneAlarmDevice(selectedDevice, preference: configuration.devicePreference) else {
+            fail("Selected device", "Not an unrestricted iPhone. Playback skipped to avoid TV/speaker/desktop fallback.")
+            return finish(lines: lines, succeeded: !hardFailure)
+        }
+
+        if selectionResult.usedFallbackDevice {
+            warn("iPhone name fallback used", "reason=\(selectionResult.reason.rawValue)")
         }
 
         if selectedDevice.supportsVolume {
@@ -164,11 +193,31 @@ final class DiagnosticReportService {
 
         add("")
         add("PLAYBACK TEST")
+        let routeManager = SpotifyAlarmRouteManager()
+        add("Request: PUT /v1/me/player")
+        add("Body: {\"device_ids\":[\"\(redactID(selectedDevice.id))\"],\"play\":false}")
+
+        do {
+            try await routeManager.transferPlaybackToDevice(client: client, deviceId: selectedDeviceID, play: false)
+            pass("Transfer command", "Sent")
+            try await Task.sleep(nanoseconds: 800_000_000)
+            let transferState = try await client.playbackState()
+            add("Transfer state: device=\(transferState?.device?.name ?? "nil"), type=\(transferState?.device?.type ?? "nil"), deviceId=\(redactID(transferState?.device?.id))")
+            guard routeManager.verifyActiveDevice(transferState, deviceId: selectedDeviceID) else {
+                fail("Transfer verification", "Spotify did not confirm this iPhone as active")
+                return finish(lines: lines, succeeded: !hardFailure)
+            }
+            pass("Transfer verification", "Confirmed this iPhone")
+        } catch {
+            fail("Transfer command", error.localizedDescription)
+            return finish(lines: lines, succeeded: !hardFailure)
+        }
+
         add("Request: PUT /v1/me/player/play?device_id=\(redactID(selectedDevice.id))")
         add("Body: {\"context_uri\":\"\(configuration.playlistUri)\"}")
 
         do {
-            try await client.startPlayback(deviceID: selectedDeviceID, contextURI: configuration.playlistUri)
+            try await routeManager.startAlarmPlaylist(client: client, deviceId: selectedDeviceID, playlistUri: configuration.playlistUri)
             pass("Playback command", "Sent")
         } catch {
             fail("Playback command", error.localizedDescription)
@@ -188,11 +237,16 @@ final class DiagnosticReportService {
                     lastStateDescription = "attempt=\(attempt), isPlaying=\(state.isPlaying), device=\(state.device?.name ?? "nil"), deviceId=\(redactID(stateDeviceID)), context=\(stateContextURI ?? "nil")"
                     add("Playback state: \(lastStateDescription)")
 
-                    let deviceMatches = stateDeviceID == nil || stateDeviceID == selectedDeviceID
+                    let deviceMatches = stateDeviceID == selectedDeviceID
                     let contextMatches = stateContextURI == nil || stateContextURI == configuration.playlistUri
                     if state.isPlaying && deviceMatches && contextMatches {
                         verified = true
                         pass("Playback verification", "Confirmed on attempt \(attempt)")
+                        if selectionResult.reason == .preferredDeviceVisible {
+                            configuration.devicePreference.lastSuccessfulPreferredDeviceTestAt = Date()
+                            configuration.devicePreference.preferredDeviceLastSeenAt = Date()
+                            store.saveConfiguration(configuration)
+                        }
                         break
                     }
                 } else {
@@ -202,7 +256,7 @@ final class DiagnosticReportService {
 
                 if attempt < maxAttempts {
                     warn("Playback verification retry", "Re-sending playback command")
-                    try await client.startPlayback(deviceID: selectedDeviceID, contextURI: configuration.playlistUri)
+                    try await routeManager.startAlarmPlaylist(client: client, deviceId: selectedDeviceID, playlistUri: configuration.playlistUri)
                 }
             } catch {
                 lastStateDescription = "attempt=\(attempt), error=\(error.localizedDescription)"
@@ -236,8 +290,6 @@ final class DiagnosticReportService {
     }
 
     private func redactID(_ id: String?) -> String {
-        guard let id, !id.isEmpty else { return "nil" }
-        if id.count <= 10 { return id }
-        return "\(id.prefix(6))...\(id.suffix(6))"
+        SpotifyDeviceSelector.idHash(id)
     }
 }

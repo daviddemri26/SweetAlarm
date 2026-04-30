@@ -14,13 +14,15 @@ struct ShortcutSetupGuideView: View {
         Run: Run Immediately
 
         Actions:
-        1. Set Volume to \(appState.configuration.targetVolume)%.
-        2. Run App Shortcut: Start Morning Spotify Alarm.
-        3. Wait 2 seconds.
-        4. Optional: Set Volume to \(appState.configuration.targetVolume)% again.
+        1. Optional: Run App Shortcut: Mark Spotify Prewarm Started.
+        2. Set Volume to 0%.
+        3. Open App: Spotify.
+        4. Play media or resume playback in Spotify.
+        5. Wait 8 seconds.
+        6. Set Volume to \(appState.configuration.targetVolume)%.
+        7. Run App Shortcut: Start Morning Spotify Alarm.
 
-        Do not add Open Spotify URL.
-        Do not add Play/Pause.
+        The first Spotify playback is only a silent prewarm. The app chooses the real playlist later and will fail closed if this iPhone is not verified.
         """
     }
 
@@ -33,14 +35,19 @@ struct ShortcutSetupGuideView: View {
             }
 
             Section("Actions") {
-                guideRow("1. Set Volume", "Set iPhone media volume to \(appState.configuration.targetVolume)%.")
-                guideRow("2. Run App Shortcut", "Choose Start Morning Spotify Alarm.")
-                guideRow("3. Wait", "Wait 2 seconds.")
-                guideRow("4. Optional Set Volume", "Set iPhone media volume to \(appState.configuration.targetVolume)% again.")
+                guideRow("1. Optional Mark Prewarm", "Run Mark Spotify Prewarm Started.")
+                guideRow("2. Set Volume", "Set iPhone media volume to 0%.")
+                guideRow("3. Open Spotify", "Open App: Spotify.")
+                guideRow("4. Start Spotify Playback", "Use Play media, Resume playback, or any reliable Siri/Spotify action.")
+                guideRow("5. Wait", "Wait 8 seconds.")
+                guideRow("6. Set Alarm Volume", "Set iPhone media volume to \(appState.configuration.targetVolume)%.")
+                guideRow("7. Run App Shortcut", "Choose Start Morning Spotify Alarm.")
             }
 
             Section {
-                Text("Do not use Open Spotify URL or Play/Pause. URL opening only opens the playlist, and Play/Pause can resume previous Spotify content.")
+                Text("The first playback is only a silent prewarm. The real alarm playlist is selected later by the app through Spotify Web API.")
+                    .font(.callout)
+                Text("The app still verifies and transfers playback to this iPhone before final playback. It never trusts the current active Spotify device.")
                     .font(.callout)
                 Button {
                     UIPasteboard.general.string = instructions

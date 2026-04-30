@@ -7,6 +7,7 @@ final class AlarmConfigStore {
     private let configurationKey = "alarmConfiguration.v1"
     private let authStateKey = "spotifyAuthState.v1"
     private let logsKey = "alarmRunLogs.v1"
+    private let prewarmStartedAtKey = "spotifyPrewarmStartedAt.v1"
     private let maxLogs = 100
 
     private init() {}
@@ -55,5 +56,17 @@ final class AlarmConfigStore {
         if let data = try? JSONEncoder().encode(logs) {
             defaults.set(data, forKey: logsKey)
         }
+    }
+
+    func markPrewarmStarted(at date: Date = Date()) {
+        defaults.set(date, forKey: prewarmStartedAtKey)
+    }
+
+    func loadPrewarmStartedAt() -> Date? {
+        defaults.object(forKey: prewarmStartedAtKey) as? Date
+    }
+
+    func clearPrewarmStartedAt() {
+        defaults.removeObject(forKey: prewarmStartedAtKey)
     }
 }

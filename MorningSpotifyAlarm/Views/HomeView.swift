@@ -11,12 +11,44 @@ struct HomeView: View {
                 LabeledContent("Repeat", value: appState.configuration.repeatDaysText)
                 LabeledContent("Shortcut volume", value: "\(appState.configuration.targetVolume)%")
                 LabeledContent("Spotify", value: appState.authSummary)
+                LabeledContent("Preferred device", value: appState.configuration.devicePreference.displayName)
+                LabeledContent("Preferred last seen", value: DateHelpers.timeString(appState.configuration.devicePreference.preferredDeviceLastSeenAt))
+                LabeledContent("Preferred visibility", value: appState.preferredDeviceVisibilityText())
+                LabeledContent("Preferred test", value: DateHelpers.timeString(appState.configuration.devicePreference.lastSuccessfulPreferredDeviceTestAt))
                 LabeledContent("Last test", value: DateHelpers.timeString(appState.configuration.lastSuccessfulRunAt))
                 LabeledContent("Backup", value: appState.configuration.backupAlarmConfigured ? "Configured" : "Needs setup")
             } header: {
                 Text("Active Configuration")
             } footer: {
-                Text("Shortcuts controls iPhone media volume. This app starts the exact Spotify playlist on the visible iPhone Spotify device.")
+                Text("Shortcuts controls iPhone media volume. This app starts Spotify on the saved preferred device. If the preferred iPhone is not visible, the safe default is to fail and let the backup alarm handle wake-up.")
+            }
+
+            if appState.preferredDeviceVisibilityText() == "Not visible" {
+                Section {
+                    Text("Run the prewarm Shortcut or open Spotify on this iPhone and play briefly to make it visible to Spotify Connect.")
+                        .foregroundStyle(.yellow)
+                }
+            }
+
+            Section {
+                LabeledContent("Preferred iPhone", value: appState.configuration.devicePreference.displayName)
+                LabeledContent("Visible now", value: appState.preferredDeviceVisibilityText())
+                Button {
+                    Task { await appState.refreshSpotifyDevices() }
+                } label: {
+                    Label("Check Spotify iPhone Device", systemImage: "iphone.radiowaves.left.and.right")
+                }
+                .disabled(appState.isRefreshingDevices)
+                Button {
+                    Task { await appState.bindVisibleIPhoneAsAlarmDevice() }
+                } label: {
+                    Label("Bind This iPhone as Alarm Device", systemImage: "target")
+                }
+                .disabled(appState.visibleSpotifyDevices.isEmpty)
+            } header: {
+                Text("Spotify iPhone Reliability")
+            } footer: {
+                Text("Spotify cannot permanently lock playback to this iPhone. The alarm uses a silent prewarm and verified fail-closed playback route.")
             }
 
             if let message = appState.latestMessage {
@@ -32,6 +64,12 @@ struct HomeView: View {
                 }
                 NavigationLink("Choose Playlist") {
                     PlaylistSetupView()
+                }
+                NavigationLink("Preferred Spotify Device") {
+                    DeviceSelectionView()
+                }
+                NavigationLink("Alarm Prewarm Setup") {
+                    PrepareIPhoneForAlarmView()
                 }
                 NavigationLink("Edit Alarm") {
                     AlarmSettingsView()
@@ -71,6 +109,7 @@ struct HomeView: View {
         .navigationTitle("Morning Spotify Alarm")
         .task {
             await appState.refreshAuthSummary()
+            await appState.refreshSpotifyDevices()
         }
     }
 }

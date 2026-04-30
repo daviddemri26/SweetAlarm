@@ -30,18 +30,20 @@ struct AlarmSettingsView: View {
             } header: {
                 Text("iPhone Volume")
             } footer: {
-                Text("The app does not control iPhone system volume. Add Shortcuts Set Volume before the App Intent.")
+                Text("The app does not control iPhone system volume. The Shortcut should set volume to 0% for Spotify prewarm, then set this target volume immediately before Start Morning Spotify Alarm.")
             }
 
             Section {
                 Toggle("Enable Spotify playback", isOn: $draft.spotifyPlaybackEnabled)
                 Toggle("Enable playback retry", isOn: $draft.retryEnabled)
-                Toggle("Allow non-iPhone fallback", isOn: $draft.allowNonIPhoneDeviceFallback)
+                Toggle("Require preferred device", isOn: $draft.devicePreference.requirePreferredDevice)
+                Toggle("Allow automatic iPhone fallback", isOn: $draft.devicePreference.allowAutomaticIPhoneFallback)
+                Toggle("Allow non-iPhone fallback", isOn: $draft.devicePreference.allowNonIPhoneFallback)
                 Toggle("Advanced Spotify-device volume", isOn: $draft.advancedSpotifyVolumeEnabled)
             } header: {
                 Text("Playback")
             } footer: {
-                Text("Keep non-iPhone fallback off for the real alarm unless Spotify is mislabeling your iPhone. Otherwise the app may start playback on a TV or speaker.")
+                Text("Keep Require preferred device on. The verified alarm route defaults to this iPhone only and fails closed instead of playing on a TV, speaker, computer, web player, or Chromecast. Spotify volume is skipped for iPhone devices that report supports_volume=false.")
             }
 
             Section {
@@ -66,6 +68,7 @@ struct AlarmSettingsView: View {
 
             Section {
                 Button {
+                    draft.allowNonIPhoneDeviceFallback = draft.devicePreference.allowNonIPhoneFallback
                     appState.save(draft)
                 } label: {
                     Label("Save Settings", systemImage: "checkmark.circle")
